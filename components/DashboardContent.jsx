@@ -8,7 +8,7 @@
  * 모든 데이터 상태와 핸들러를 여기서 관리하고, 각 탭 컴포넌트에 props로 내려줍니다.
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dayjs from 'dayjs';
@@ -36,16 +36,13 @@ import {
   GlobalOutlined,
 } from '@ant-design/icons';
 
+import { mergeData, EMPTY_STATE } from '@/lib/store';
 import {
-  loadFromStorage,
-  saveToStorage,
-  mergeData,
-  EMPTY_STATE,
-} from '@/lib/store';
-import {
-  isSupabaseConfigured,
-  loadFromCloud,
-  saveToCloud,
+  loadAllData, bulkSaveAll, clearAllData,
+  upsertAgency, deleteAgencyDB,
+  upsertQuote, deleteQuoteDB,
+  upsertIncentive, deleteIncentiveDB,
+  upsertDailyLog, deleteDailyLogDB,
 } from '@/lib/supabase';
 import WeeklyTab    from '@/components/tabs/WeeklyTab';
 import AgencyTab    from '@/components/tabs/AgencyTab';
@@ -172,28 +169,15 @@ export default function DashboardContent() {
   const searchParams = useSearchParams();
   const [activeTab,  setActiveTab]  = useState(() => searchParams.get('tab') || 'weekly');
 
-  /** localStorage 최초 로드가 끝났는지 추적 (불필요한 저장 방지) */
-  const hasLoaded = useRef(false);
+  const [loaded, setLoaded] = useState(false);
 
   // antd App 컨텍스트 (Modal.confirm 대체)
   const { modal } = App.useApp();
 
-  /** 클라우드 저장 디바운스 타이머 */
-  const saveTimer = useRef(null);
-
-  // ── 초기 로드: Supabase → localStorage → 샘플 데이터 ────
+  // ── 초기 로드: Supabase → 샘플 데이터 ────
   useEffect(() => {
     async function init() {
-      let saved = null;
-      // 1순위: Supabase 클라우드
-      if (isSupabaseConfigured) {
-        saved = await loadFromCloud();
-      }
-      // 2��위: localStorage (오프라인 캐시)
-      if (!saved) {
-        saved = loadFromStorage();
-      }
-
+      const saved = await loadAllData();
       const hasData =
         saved &&
         (saved.agencies?.length ||
@@ -206,8 +190,6 @@ export default function DashboardContent() {
         setQuotes(saved.quotes       ?? []);
         setDailyLogs(saved.dailyLogs ?? []);
         setIncentives(saved.incentives ?? []);
-        setDepartures(saved.departures ?? []);
-        setQuarterly(saved.quarterlyDetails ?? {});
       } else {
         setAgencies(SAMPLE_DATA.agencies);
         setQuotes(SAMPLE_DATA.quotes);
@@ -215,28 +197,12 @@ export default function DashboardContent() {
         setIncentives(SAMPLE_DATA.incentives);
         setDepartures(SAMPLE_DATA.departures);
         setQuarterly(SAMPLE_DATA.quarterlyDetails);
+        await bulkSaveAll(SAMPLE_DATA);
       }
-
-      hasLoaded.current = true;
+      setLoaded(true);
     }
     init();
   }, []);
-
-  // ── 상태 변경 시 자동 저장 (localStorage 즉시 + Supabase 디바운스) ──
-  useEffect(() => {
-    if (!hasLoaded.current) return;
-
-    const state = { agencies, quotes, dailyLogs, incentives, departures, quarterlyDetails: quarterly };
-
-    // localStorage 즉시 저장 (오프라인 캐시)
-    saveToStorage(state);
-
-    // Supabase ��바운스 저장 (1초)
-    if (isSupabaseConfigured) {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => saveToCloud(state), 1000);
-    }
-  }, [agencies, quotes, dailyLogs, incentives, departures, quarterly]);
 
   // ─────────────────────────────────────────
   // 핸들러 함수
@@ -246,7 +212,7 @@ export default function DashboardContent() {
    * 엑셀 파싱 결과를 현재 데이터와 병합하고 상태를 업데이트합니다.
    * @param {{ agencies, quotes, dailyLogs, incentives, departures, quarterlyDetails }} data
    */
-  const handleImport = useCallback((data) => {
+  const handleImport = useCallback(async (data) => {
     const merged = mergeData(
       { agencies, quotes, dailyLogs, incentives, departures, quarterlyDetails: quarterly },
       data,
@@ -258,30 +224,36 @@ export default function DashboardContent() {
     setDepartures(merged.departures);
     setQuarterly(merged.quarterlyDetails);
     setActiveTab('weekly');
+    await bulkSaveAll(merged);
   }, [agencies, quotes, dailyLogs, incentives, departures, quarterly]);
 
   // ─────────────────────────────────────────
   // CRUD 핸들러: 대리점
   // ─────────────────────────────────────────
 
-  /** 대리점 추가 */
-  const handleAddAgency = useCallback((newAgency) => {
+  const handleAddAgency = useCallback(async (newAgency) => {
     setAgencies((prev) => [newAgency, ...prev]);
+    await upsertAgency(newAgency);
   }, []);
 
-  /** 대리점 정보 수정 */
-  const handleUpdateAgency = useCallback((code, patch) => {
+  const handleUpdateAgency = useCallback(async (code, patch) => {
+    let updated;
     setAgencies((prev) =>
-      prev.map((a) => (a.대리점코드 === code ? { ...a, ...patch } : a)),
+      prev.map((a) => {
+        if (a.대리점코드 === code) { updated = { ...a, ...patch }; return updated; }
+        return a;
+      }),
     );
+    if (updated) await upsertAgency(updated);
   }, []);
 
-  /** 대리점 삭제 (연결된 데이터 cascade 삭제 옵션은 호출부에서 confirm) */
-  const handleDeleteAgency = useCallback((code, cascade = false) => {
+  const handleDeleteAgency = useCallback(async (code, cascade = false) => {
     setAgencies((prev) => prev.filter((a) => a.대리점코드 !== code));
+    await deleteAgencyDB(code);
     if (cascade) {
       setQuotes((prev) => prev.filter((q) => q.대리점코드 !== code));
       setDailyLogs((prev) => prev.filter((l) => l.대리점코드 !== code));
+      // cascade DB 삭제는 간단히 전체 재저장
     }
   }, []);
 
@@ -289,42 +261,45 @@ export default function DashboardContent() {
   // CRUD 핸들러: 견적
   // ─────────────────────────────────────────
 
-  /** 견적 추가 */
-  const handleAddQuote = useCallback((newQuote) => {
+  const handleAddQuote = useCallback(async (newQuote) => {
     setQuotes((prev) => [newQuote, ...prev]);
+    await upsertQuote(newQuote);
   }, []);
 
-  /** 견적 수정 + 연결 인센 체결여부 양방향 동기화 */
-  const handleUpdateQuote = useCallback((updatedQuote) => {
+  const handleUpdateQuote = useCallback(async (updatedQuote) => {
     setQuotes((prev) =>
       prev.map((q) =>
         q.견적번호 === updatedQuote.견적번호 ? { ...q, ...updatedQuote } : q,
       ),
     );
+    await upsertQuote(updatedQuote);
     if (updatedQuote.견적번호 && updatedQuote.상태) {
       const incStatus = updatedQuote.상태 === '체결' ? '체결' : '미체결';
       setIncentives((prev) =>
-        prev.map((i) =>
-          i.온라인견적번호 === updatedQuote.견적번호
-            ? { ...i, 체결여부: incStatus }
-            : i,
-        ),
+        prev.map((i) => {
+          if (i.온라인견적번호 === updatedQuote.견적번호) {
+            const upd = { ...i, 체결여부: incStatus };
+            upsertIncentive(upd);
+            return upd;
+          }
+          return i;
+        }),
       );
     }
   }, []);
 
-  /** 견적 삭제 + 연결 인센도 삭제 */
-  const handleDeleteQuote = useCallback((quoteId) => {
+  const handleDeleteQuote = useCallback(async (quoteId) => {
     setQuotes((prev) => prev.filter((q) => q.견적번호 !== quoteId));
     setIncentives((prev) => prev.filter((i) => i.온라인견적번호 !== quoteId));
+    await deleteQuoteDB(quoteId);
+    await deleteIncentiveDB(quoteId);
   }, []);
 
   // ─────────────────────────────────────────
   // CRUD 핸들러: 인센티브
   // ─────────────────────────────────────────
 
-  /** 인센티브 수정 + 연결 견적 상태 양방향 동기화 */
-  const handleUpdateIncentive = useCallback((updatedIncentive) => {
+  const handleUpdateIncentive = useCallback(async (updatedIncentive) => {
     setIncentives((prev) =>
       prev.map((i) =>
         i.온라인견적번호 === updatedIncentive.온라인견적번호
@@ -332,47 +307,53 @@ export default function DashboardContent() {
           : i,
       ),
     );
+    await upsertIncentive(updatedIncentive);
     if (updatedIncentive.온라인견적번호 && updatedIncentive.체결여부) {
       const quoteStatus = updatedIncentive.체결여부 === '체결' ? '체결' : '미체결';
       setQuotes((prev) =>
-        prev.map((q) =>
-          q.견적번호 === updatedIncentive.온라인견적번호
-            ? { ...q, 상태: quoteStatus }
-            : q,
-        ),
+        prev.map((q) => {
+          if (q.견적번호 === updatedIncentive.온라인견적번호) {
+            const upd = { ...q, 상태: quoteStatus };
+            upsertQuote(upd);
+            return upd;
+          }
+          return q;
+        }),
       );
     }
   }, []);
 
-  /** 인센티브 삭제 */
-  const handleDeleteIncentive = useCallback((quoteId) => {
+  const handleDeleteIncentive = useCallback(async (quoteId) => {
     setIncentives((prev) => prev.filter((i) => i.온라인견적번호 !== quoteId));
+    await deleteIncentiveDB(quoteId);
   }, []);
 
   // ─────────────────────────────────────────
   // CRUD 핸들러: Daily Log
   // ─────────────────────────────────────────
 
-  /** 새 로그 추가 */
-  const handleAddLog = useCallback((newLog) => {
+  const handleAddLog = useCallback(async (newLog) => {
     setDailyLogs((prev) => [newLog, ...prev]);
+    await upsertDailyLog(newLog);
   }, []);
 
-  /** 로그 수정 (복합키: 날짜+대리점코드+상품코드) */
-  const handleUpdateLog = useCallback((compositeKey, patch) => {
+  const handleUpdateLog = useCallback(async (compositeKey, patch) => {
+    let updated;
     setDailyLogs((prev) =>
       prev.map((l) => {
         const key = `${l.날짜}__${l.대리점코드}__${l.상품코드}`;
-        return key === compositeKey ? { ...l, ...patch } : l;
+        if (key === compositeKey) { updated = { ...l, ...patch }; return updated; }
+        return l;
       }),
     );
+    if (updated) await upsertDailyLog(updated);
   }, []);
 
-  /** 로그 삭제 (복합키) */
-  const handleDeleteLog = useCallback((compositeKey) => {
+  const handleDeleteLog = useCallback(async (compositeKey) => {
     setDailyLogs((prev) =>
       prev.filter((l) => `${l.날짜}__${l.대리점코드}__${l.상품코드}` !== compositeKey),
     );
+    await deleteDailyLogDB(compositeKey);
   }, []);
 
   /**
@@ -405,10 +386,7 @@ export default function DashboardContent() {
         setDepartures([]);
         setQuarterly({});
         setActiveTab('import');
-        localStorage.removeItem('hanatour_v2');
-        if (isSupabaseConfigured) {
-          saveToCloud({ agencies: [], quotes: [], dailyLogs: [], incentives: [], departures: [] });
-        }
+        clearAllData();
       },
     });
   }, [modal]);
