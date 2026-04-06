@@ -42,6 +42,11 @@ import {
   mergeData,
   EMPTY_STATE,
 } from '@/lib/store';
+import {
+  isSupabaseConfigured,
+  loadFromCloud,
+  saveToCloud,
+} from '@/lib/supabase';
 import WeeklyTab    from '@/components/tabs/WeeklyTab';
 import AgencyTab    from '@/components/tabs/AgencyTab';
 import PipelineTab  from '@/components/tabs/PipelineTab';
@@ -173,47 +178,64 @@ export default function DashboardContent() {
   // antd App 컨텍스트 (Modal.confirm 대체)
   const { modal } = App.useApp();
 
-  // ── localStorage 초기 로드 ────────────────
+  /** 클라우드 저장 디바운스 타이머 */
+  const saveTimer = useRef(null);
+
+  // ── 초기 로드: Supabase → localStorage → 샘플 데이터 ────
   useEffect(() => {
-    const saved = loadFromStorage();
-    const hasData =
-      saved &&
-      (saved.agencies?.length ||
-        saved.quotes?.length ||
-        saved.dailyLogs?.length ||
-        saved.incentives?.length);
+    async function init() {
+      let saved = null;
+      // 1순위: Supabase 클라우드
+      if (isSupabaseConfigured) {
+        saved = await loadFromCloud();
+      }
+      // 2��위: localStorage (오프라인 캐시)
+      if (!saved) {
+        saved = loadFromStorage();
+      }
 
-    if (hasData) {
-      setAgencies(saved.agencies   ?? []);
-      setQuotes(saved.quotes       ?? []);
-      setDailyLogs(saved.dailyLogs ?? []);
-      setIncentives(saved.incentives ?? []);
-      setDepartures(saved.departures ?? []);
-      setQuarterly(saved.quarterlyDetails ?? {});
-    } else {
-      // 저장 데이터 없음 → 샘플 데이터로 시작
-      setAgencies(SAMPLE_DATA.agencies);
-      setQuotes(SAMPLE_DATA.quotes);
-      setDailyLogs(SAMPLE_DATA.dailyLogs);
-      setIncentives(SAMPLE_DATA.incentives);
-      setDepartures(SAMPLE_DATA.departures);
-      setQuarterly(SAMPLE_DATA.quarterlyDetails);
+      const hasData =
+        saved &&
+        (saved.agencies?.length ||
+          saved.quotes?.length ||
+          saved.dailyLogs?.length ||
+          saved.incentives?.length);
+
+      if (hasData) {
+        setAgencies(saved.agencies   ?? []);
+        setQuotes(saved.quotes       ?? []);
+        setDailyLogs(saved.dailyLogs ?? []);
+        setIncentives(saved.incentives ?? []);
+        setDepartures(saved.departures ?? []);
+        setQuarterly(saved.quarterlyDetails ?? {});
+      } else {
+        setAgencies(SAMPLE_DATA.agencies);
+        setQuotes(SAMPLE_DATA.quotes);
+        setDailyLogs(SAMPLE_DATA.dailyLogs);
+        setIncentives(SAMPLE_DATA.incentives);
+        setDepartures(SAMPLE_DATA.departures);
+        setQuarterly(SAMPLE_DATA.quarterlyDetails);
+      }
+
+      hasLoaded.current = true;
     }
-
-    hasLoaded.current = true;
+    init();
   }, []);
 
-  // ── 상태 변경 시 자동 저장 ────────────────
+  // ── 상태 변경 시 자동 저장 (localStorage 즉시 + Supabase 디바운스) ──
   useEffect(() => {
     if (!hasLoaded.current) return;
-    saveToStorage({
-      agencies,
-      quotes,
-      dailyLogs,
-      incentives,
-      departures,
-      quarterlyDetails: quarterly,
-    });
+
+    const state = { agencies, quotes, dailyLogs, incentives, departures, quarterlyDetails: quarterly };
+
+    // localStorage 즉시 저장 (오프라인 캐시)
+    saveToStorage(state);
+
+    // Supabase ��바운스 저장 (1초)
+    if (isSupabaseConfigured) {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => saveToCloud(state), 1000);
+    }
   }, [agencies, quotes, dailyLogs, incentives, departures, quarterly]);
 
   // ─────────────────────────────────────────
@@ -384,6 +406,9 @@ export default function DashboardContent() {
         setQuarterly({});
         setActiveTab('import');
         localStorage.removeItem('hanatour_v2');
+        if (isSupabaseConfigured) {
+          saveToCloud({ agencies: [], quotes: [], dailyLogs: [], incentives: [], departures: [] });
+        }
       },
     });
   }, [modal]);
