@@ -294,6 +294,7 @@ const BASE_COLUMNS = [
 export default function DailyLogTab({
   dailyLogs = [], agencies = [],
   onAddLog, onUpdateLog, onDeleteLog,
+  isAdmin,
 }) {
   const { message } = App.useApp();
   const [filterDates, setDates] = useState(null);
@@ -305,7 +306,7 @@ export default function DailyLogTab({
   // ── 컬럼 (수정+삭제 컬럼 포함) ──
   const columns = useMemo(() => [
     ...BASE_COLUMNS,
-    {
+    ...(isAdmin ? [{
       title: '', width: 65, align: 'center', fixed: 'right',
       render: (_, r) => {
         const key = `${r.날짜}__${r.대리점코드}__${r.상품코드}`;
@@ -321,8 +322,8 @@ export default function DailyLogTab({
           </Space>
         );
       },
-    },
-  ], [onDeleteLog]);
+    }] : []),
+  ], [onDeleteLog, isAdmin]);
 
   // ── 필터링 ──
   const filtered = useMemo(() => {
@@ -397,7 +398,7 @@ export default function DailyLogTab({
         </Space>
       </div>
 
-      <QuickAddRow agencies={agencies} onAdd={onAddLog} />
+      {isAdmin && <QuickAddRow agencies={agencies} onAdd={onAddLog} />}
 
       {/* ── 필터 바 ── */}
       <Card size="small" style={{ marginBottom: 16, borderRadius: 10, borderColor: '#dde8f5' }} styles={{ body: { padding: '10px 16px' } }}>

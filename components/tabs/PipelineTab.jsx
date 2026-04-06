@@ -166,6 +166,7 @@ export default function PipelineTab({
   agencies = [],
   incentives = [],
   quarterly = {},
+  isAdmin,
   onAddQuote,
   onUpdateQuote,
   onDeleteQuote,
@@ -316,7 +317,7 @@ export default function PipelineTab({
         );
       },
     },
-    {
+    ...(isAdmin ? [{
       title: '',
       width: 40,
       align: 'center',
@@ -334,8 +335,8 @@ export default function PipelineTab({
             onClick={(e) => e.stopPropagation()} />
         </Popconfirm>
       ),
-    },
-  ], [incentiveMap, handleDeleteQuote]);
+    }] : []),
+  ], [incentiveMap, handleDeleteQuote, isAdmin]);
 
   // ── 렌더 ──
   return (
@@ -369,8 +370,10 @@ export default function PipelineTab({
           <FileTextOutlined style={{ fontSize: 20, color: '#fa8c16' }} />
           <Typography.Title level={4} style={{ margin: 0 }}>견적 파이프라인</Typography.Title>
         </Space>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setSelectedQuote({}); setIsNewQuote(true); }}
-          style={{ background: '#fa8c16', borderColor: '#fa8c16' }}>견적 추가</Button>
+        {isAdmin && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setSelectedQuote({}); setIsNewQuote(true); }}
+            style={{ background: '#fa8c16', borderColor: '#fa8c16' }}>견적 추가</Button>
+        )}
       </div>
 
       {/* ── 필터 바 ── */}

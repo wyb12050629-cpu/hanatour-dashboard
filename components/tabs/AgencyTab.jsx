@@ -347,6 +347,7 @@ export default function AgencyTab({
   onAddAgency,
   onUpdateAgency,
   onDeleteAgency,
+  isAdmin,
 }) {
   const { message } = App.useApp();
   const [search, setSearch] = useState('');
@@ -394,7 +395,8 @@ export default function AgencyTab({
   }, []);
 
   // ── 컬럼 (견적/인입 제거됨, 수정/삭제 추가) ──
-  const columns = useMemo(() => [
+  const columns = useMemo(() => {
+    const cols = [
     {
       title: '코드', dataIndex: '대리점코드', width: 80, fixed: 'left', ellipsis: true,
       render: (v) => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text>,
@@ -446,25 +448,29 @@ export default function AgencyTab({
     },
     { title: '다음액션', dataIndex: '다음액션', width: 100, ellipsis: true },
     { title: '특징', dataIndex: '특징', width: 100, ellipsis: true },
-    {
-      title: '', width: 70, align: 'center', fixed: 'right',
-      render: (_, r) => (
-        <Space size={2}>
-          <Button type="text" size="small" icon={<EditOutlined />}
-            onClick={(e) => { e.stopPropagation(); openEditModal(r); }}
-            style={{ color: '#0054A6' }} />
-          <Popconfirm title="대리점 삭제"
-            description="이 대리점을 삭제하면 연결된 견적 데이터도 영향받을 수 있습니다. 삭제하시겠습니까?"
-            onConfirm={(e) => { e?.stopPropagation(); onDeleteAgency?.(r.대리점코드, true); }}
-            onCancel={(e) => e?.stopPropagation()}
-            okText="삭제" cancelText="취소" okType="danger">
-            <Button type="text" danger size="small" icon={<DeleteOutlined />}
-              onClick={(e) => e.stopPropagation()} />
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ], [openEditModal, onDeleteAgency]);
+    ];
+    if (isAdmin) {
+      cols.push({
+        title: '', width: 70, align: 'center', fixed: 'right',
+        render: (_, r) => (
+          <Space size={2}>
+            <Button type="text" size="small" icon={<EditOutlined />}
+              onClick={(e) => { e.stopPropagation(); openEditModal(r); }}
+              style={{ color: '#0054A6' }} />
+            <Popconfirm title="대리점 삭제"
+              description="이 대리점을 삭제하면 연결된 견적 데이터도 영향받을 수 있습니다. 삭제하시겠습니까?"
+              onConfirm={(e) => { e?.stopPropagation(); onDeleteAgency?.(r.대리점코드, true); }}
+              onCancel={(e) => e?.stopPropagation()}
+              okText="삭제" cancelText="취소" okType="danger">
+              <Button type="text" danger size="small" icon={<DeleteOutlined />}
+                onClick={(e) => e.stopPropagation()} />
+            </Popconfirm>
+          </Space>
+        ),
+      });
+    }
+    return cols;
+  }, [isAdmin, openEditModal, onDeleteAgency]);
 
   return (
     <div style={{ padding: 24 }}>
@@ -483,10 +489,12 @@ export default function AgencyTab({
             placeholder="대리점명 · 코드 · 담당자 검색"
             value={search} onChange={(e) => setSearch(e.target.value)}
             allowClear style={{ width: 240, borderRadius: 8 }} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={openNewModal}
-            style={{ background: '#0054A6' }}>
-            대리점 추가
-          </Button>
+          {isAdmin && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openNewModal}
+              style={{ background: '#0054A6' }}>
+              대리점 추가
+            </Button>
+          )}
         </Space>
       </div>
 

@@ -22,6 +22,8 @@ import {
   Tag,
   App,
   Divider,
+  Modal,
+  Input,
 } from 'antd';
 import {
   CalendarOutlined,
@@ -34,6 +36,8 @@ import {
   ReloadOutlined,
   WarningOutlined,
   GlobalOutlined,
+  LockOutlined,
+  UnlockOutlined,
 } from '@ant-design/icons';
 
 import { mergeData, EMPTY_STATE } from '@/lib/store';
@@ -170,6 +174,36 @@ export default function DashboardContent() {
   const [activeTab,  setActiveTab]  = useState(() => searchParams.get('tab') || 'weekly');
 
   const [loaded, setLoaded] = useState(false);
+
+  // ── 관리자 인증 ──
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginPw, setLoginPw] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // sessionStorage에서 관리자 상태 복원
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('isAdmin') === 'true') {
+      setIsAdmin(true);
+    }
+  }, []);
+
+  const handleLogin = useCallback(() => {
+    if (loginPw === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
+      setIsAdmin(true);
+      sessionStorage.setItem('isAdmin', 'true');
+      setShowLoginModal(false);
+      setLoginPw('');
+      setLoginError('');
+    } else {
+      setLoginError('비밀번호가 올바르지 않습니다');
+    }
+  }, [loginPw]);
+
+  const handleLogout = useCallback(() => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('isAdmin');
+  }, []);
 
   // antd App 컨텍스트 (Modal.confirm 대체)
   const { modal } = App.useApp();
@@ -436,6 +470,7 @@ export default function DashboardContent() {
       ),
       children: (
         <AgencyTab
+          isAdmin={isAdmin}
           agencies={agencies}
           quotes={quotes}
           dailyLogs={dailyLogs}
@@ -455,6 +490,7 @@ export default function DashboardContent() {
       ),
       children: (
         <PipelineTab
+          isAdmin={isAdmin}
           quotes={quotes}
           agencies={agencies}
           incentives={incentives}
@@ -476,6 +512,7 @@ export default function DashboardContent() {
       ),
       children: (
         <IncentiveTab
+          isAdmin={isAdmin}
           incentives={incentives}
           quarterly={quarterly}
           quotes={quotes}
@@ -514,6 +551,7 @@ export default function DashboardContent() {
       ),
       children: (
         <DailyLogTab
+          isAdmin={isAdmin}
           dailyLogs={dailyLogs}
           agencies={agencies}
           onAddLog={handleAddLog}
@@ -611,14 +649,29 @@ export default function DashboardContent() {
             <Typography.Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, whiteSpace: 'nowrap' }}>
               {dayjs().format('YYYY.MM.DD (ddd)')}
             </Typography.Text>
-            <Tooltip title="모든 데이터 초기화">
+            {isAdmin && (
+              <Tooltip title="모든 데이터 초기화">
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={handleReset}
+                  style={{
+                    background: 'rgba(255,255,255,0.15)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    color: '#fff',
+                    borderRadius: 6,
+                  }}
+                />
+              </Tooltip>
+            )}
+            <Tooltip title={isAdmin ? '관리자 로그아웃' : '관리자 로그인'}>
               <Button
                 size="small"
-                icon={<ReloadOutlined />}
-                onClick={handleReset}
+                icon={isAdmin ? <UnlockOutlined /> : <LockOutlined />}
+                onClick={isAdmin ? handleLogout : () => setShowLoginModal(true)}
                 style={{
-                  background: 'rgba(255,255,255,0.15)',
-                  border: '1px solid rgba(255,255,255,0.3)',
+                  background: isAdmin ? 'rgba(82,196,26,0.25)' : 'rgba(255,255,255,0.15)',
+                  border: `1px solid ${isAdmin ? 'rgba(82,196,26,0.5)' : 'rgba(255,255,255,0.3)'}`,
                   color: '#fff',
                   borderRadius: 6,
                 }}
@@ -627,6 +680,38 @@ export default function DashboardContent() {
           </Space>
         </div>
       </header>
+
+      {/* ── 관리자 로그인 모달 ── */}
+      <Modal
+        open={showLoginModal}
+        onCancel={() => { setShowLoginModal(false); setLoginPw(''); setLoginError(''); }}
+        title={<Space><LockOutlined style={{ color: '#5C2D91' }} /><span>관리자 로그인</span></Space>}
+        centered
+        destroyOnHidden
+        footer={[
+          <Button key="cancel" onClick={() => { setShowLoginModal(false); setLoginPw(''); setLoginError(''); }}>취소</Button>,
+          <Button key="login" type="primary" onClick={handleLogin} style={{ background: '#5C2D91' }}>로그인</Button>,
+        ]}
+      >
+        <div style={{ padding: '8px 0' }}>
+          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 13 }}>
+            데이터 수정/삭제/추가를 위해 관리자 비밀번호를 입력하세요.
+          </Typography.Text>
+          <Input.Password
+            size="large"
+            placeholder="비밀번호 입력"
+            value={loginPw}
+            onChange={(e) => { setLoginPw(e.target.value); setLoginError(''); }}
+            onPressEnter={handleLogin}
+            status={loginError ? 'error' : ''}
+          />
+          {loginError && (
+            <Typography.Text type="danger" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+              {loginError}
+            </Typography.Text>
+          )}
+        </div>
+      </Modal>
 
       {/* ── 탭 영역 ── */}
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px' }}>

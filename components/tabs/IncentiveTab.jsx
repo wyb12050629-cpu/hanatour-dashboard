@@ -214,6 +214,7 @@ export default function IncentiveTab({
   departures = [],
   onUpdateIncentive,
   onDeleteIncentive,
+  isAdmin,
 }) {
   const { message } = App.useApp();
 
@@ -300,24 +301,26 @@ export default function IncentiveTab({
     if (regionCol) {
       regionCol.filters = regionOptions.map((r) => ({ text: r.label, value: r.value }));
     }
-    cols.push({
-      title: '',
-      width: 40,
-      align: 'center',
-      render: (_, r) => (
-        <Popconfirm
-          title="인센티브 삭제"
-          onConfirm={(e) => { e?.stopPropagation(); handleDelete(r.온라인견적번호); }}
-          onCancel={(e) => e?.stopPropagation()}
-          okText="삭제" cancelText="취소" okType="danger"
-        >
-          <Button type="text" danger size="small" icon={<DeleteOutlined />}
-            onClick={(e) => e.stopPropagation()} />
-        </Popconfirm>
-      ),
-    });
+    if (isAdmin) {
+      cols.push({
+        title: '',
+        width: 40,
+        align: 'center',
+        render: (_, r) => (
+          <Popconfirm
+            title="인센티브 삭제"
+            onConfirm={(e) => { e?.stopPropagation(); handleDelete(r.온라인견적번호); }}
+            onCancel={(e) => e?.stopPropagation()}
+            okText="삭제" cancelText="취소" okType="danger"
+          >
+            <Button type="text" danger size="small" icon={<DeleteOutlined />}
+              onClick={(e) => e.stopPropagation()} />
+          </Popconfirm>
+        ),
+      });
+    }
     return cols;
-  }, [regionOptions, handleDelete]);
+  }, [regionOptions, handleDelete, isAdmin]);
 
   const handleSave = useCallback((updated) => {
     onUpdateIncentive?.(updated);
@@ -488,7 +491,7 @@ export default function IncentiveTab({
         record={selected}
         quoteInfo={selected ? quoteMap.get(selected.온라인견적번호) ?? null : null}
         onSave={handleSave}
-        onDelete={handleDelete}
+        onDelete={isAdmin ? handleDelete : undefined}
         onCancel={() => setSelected(null)}
       />
 
