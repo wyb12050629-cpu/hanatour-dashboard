@@ -211,27 +211,45 @@ export default function DashboardContent() {
   // ── 초기 로드: Supabase → 샘플 데이터 ────
   useEffect(() => {
     async function init() {
-      const saved = await loadAllData();
-      const hasData =
-        saved &&
-        (saved.agencies?.length ||
-          saved.quotes?.length ||
-          saved.dailyLogs?.length ||
-          saved.incentives?.length);
+      try {
+        console.log('[dashboard] 데이터 로드 시작...');
+        const saved = await loadAllData();
+        console.log('[dashboard] loadAllData 결과:', {
+          agencies: saved?.agencies?.length ?? 0,
+          quotes: saved?.quotes?.length ?? 0,
+          dailyLogs: saved?.dailyLogs?.length ?? 0,
+          incentives: saved?.incentives?.length ?? 0,
+        });
 
-      if (hasData) {
-        setAgencies(saved.agencies   ?? []);
-        setQuotes(saved.quotes       ?? []);
-        setDailyLogs(saved.dailyLogs ?? []);
-        setIncentives(saved.incentives ?? []);
-      } else {
+        const hasData =
+          saved &&
+          (saved.agencies?.length ||
+            saved.quotes?.length ||
+            saved.dailyLogs?.length ||
+            saved.incentives?.length);
+
+        if (hasData) {
+          setAgencies(saved.agencies   ?? []);
+          setQuotes(saved.quotes       ?? []);
+          setDailyLogs(saved.dailyLogs ?? []);
+          setIncentives(saved.incentives ?? []);
+          console.log('[dashboard] Supabase 데이터 로드 완료');
+        } else {
+          console.log('[dashboard] DB 비어있음 → 샘플 데이터 사용');
+          setAgencies(SAMPLE_DATA.agencies);
+          setQuotes(SAMPLE_DATA.quotes);
+          setDailyLogs(SAMPLE_DATA.dailyLogs);
+          setIncentives(SAMPLE_DATA.incentives);
+          setDepartures(SAMPLE_DATA.departures);
+          setQuarterly(SAMPLE_DATA.quarterlyDetails);
+          await bulkSaveAll(SAMPLE_DATA);
+        }
+      } catch (err) {
+        console.error('[dashboard] 초기 로드 실패:', err);
         setAgencies(SAMPLE_DATA.agencies);
         setQuotes(SAMPLE_DATA.quotes);
         setDailyLogs(SAMPLE_DATA.dailyLogs);
         setIncentives(SAMPLE_DATA.incentives);
-        setDepartures(SAMPLE_DATA.departures);
-        setQuarterly(SAMPLE_DATA.quarterlyDetails);
-        await bulkSaveAll(SAMPLE_DATA);
       }
       setLoaded(true);
     }
