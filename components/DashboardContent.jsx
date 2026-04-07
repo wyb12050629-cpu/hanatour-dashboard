@@ -375,6 +375,11 @@ export default function DashboardContent() {
     }
   }, []);
 
+  const handleAddIncentive = useCallback(async (newIncentive) => {
+    setIncentives((prev) => [newIncentive, ...prev]);
+    await upsertIncentive(newIncentive);
+  }, []);
+
   const handleDeleteIncentive = useCallback(async (quoteId) => {
     setIncentives((prev) => prev.filter((i) => i.온라인견적번호 !== quoteId));
     await deleteIncentiveDB(quoteId);
@@ -535,6 +540,7 @@ export default function DashboardContent() {
           quarterly={quarterly}
           quotes={quotes}
           departures={departures}
+          onAddIncentive={handleAddIncentive}
           onUpdateIncentive={handleUpdateIncentive}
           onDeleteIncentive={handleDeleteIncentive}
         />

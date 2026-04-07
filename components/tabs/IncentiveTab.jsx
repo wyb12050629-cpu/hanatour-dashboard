@@ -40,8 +40,11 @@ import {
   SaveOutlined,
   FileTextOutlined,
   GlobalOutlined,
+  PlusOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import { formatKRW, calcIncentiveSummary, getQuarterRange } from '@/lib/store';
+import { upsertIncentive } from '@/lib/supabase';
 import IncentiveDetailModal from '@/components/IncentiveDetailModal';
 
 const { RangePicker } = DatePicker;
@@ -205,6 +208,176 @@ function getColumns() {
 }
 
 // ─────────────────────────────────────────────
+// 인센티브 추가 모달
+// ─────────────────────────────────────────────
+
+const REGION_OPTIONS = ['동남아', '유럽', '일본', '미주', '중국', '대만', '기타'].map((v) => ({ value: v, label: v }));
+const CONFIRM_OPTIONS = [{ value: '체결', label: '체결' }, { value: '미체결', label: '미체결' }];
+
+function AddIncentiveModal({ open, onClose, quotes, existingQuoteIds, onAdd }) {
+  const [selectedQuote, setSelectedQuote] = useState(null);
+  const [form, setForm] = useState({ 키맨: '', 상품담당자: '', 지역: undefined, 팀컬러: '', 체결여부: '체결' });
+  const [saving, setSaving] = useState(false);
+
+  const quoteOptions = useMemo(() => {
+    return quotes
+      .filter((q) => q.견적번호)
+      .map((q) => {
+        const exists = existingQuoteIds.has(q.견적번호);
+        return {
+          value: q.견적번호,
+          label: `${q.견적번호} | ${q.대리점명 || '—'} | ${q.출발일 || '—'}`,
+          disabled: exists,
+          quote: q,
+          suffix: exists ? ' (정산 등록됨)' : '',
+        };
+      });
+  }, [quotes, existingQuoteIds]);
+
+  const handleQuoteSelect = (value) => {
+    const opt = quoteOptions.find((o) => o.value === value);
+    setSelectedQuote(opt?.quote || null);
+  };
+
+  const handleSave = async () => {
+    if (!selectedQuote) return;
+    setSaving(true);
+    const newIncentive = {
+      온라인견적번호: selectedQuote.견적번호,
+      대리점명: selectedQuote.대리점명 || '',
+      출발일: selectedQuote.출발일 || '',
+      인원수: selectedQuote.인원 || 0,
+      상품코드: selectedQuote.상품코드 || '',
+      키맨: form.키맨,
+      상품담당자: form.상품담당자,
+      지역: form.지역 || '',
+      팀컬러: form.팀컬러,
+      체결여부: form.체결여부 || '체결',
+      최초입금가: 0, 최종입금가: 0, 최종넷가: 0, 총매출액: 0, 하나투어수익: 0,
+      선발권여부: 'X', 발권여부: 'X', 입금완료: 'X',
+      계약금납입여부: 'X', 입금가변동: 'X',
+      지상비: 0, 호텔명: '', 호텔특이사항: '', 지상특이사항: '',
+      추가옵션여부: 'X', 추가옵션내용: '', 가이드형태: '',
+      특이사항: '',
+      업데이트일: dayjs().format('YYYY-MM-DD'),
+      항공_대리점: 0, 항공_하나투어: 0,
+      지상_대리점: 0, 지상_하나투어: 0,
+      공동경비_대리점: 0, 공동경비_하나투어: 0,
+      넷가_대리점: 0, 넷가_하나투어: 0,
+      수익_대리점: 0, 수익_하나투어: 0,
+      입금가_대리점: 0, 입금가_하나투어: 0,
+    };
+    await onAdd(newIncentive);
+    setSaving(false);
+    handleClose();
+  };
+
+  const handleClose = () => {
+    setSelectedQuote(null);
+    setForm({ 키맨: '', 상품담당자: '', 지역: undefined, 팀컬러: '', 체결여부: '체결' });
+    onClose();
+  };
+
+  return (
+    <Modal
+      open={open}
+      onCancel={handleClose}
+      title={<Space><PlusOutlined style={{ color: '#722ed1' }} /><span>인센티브 추가</span></Space>}
+      width={560}
+      centered
+      destroyOnClose
+      footer={
+        <Space>
+          <Button onClick={handleClose}>취소</Button>
+          <Button type="primary" onClick={handleSave} loading={saving} disabled={!selectedQuote}
+            style={{ background: '#722ed1', borderColor: '#722ed1' }}>
+            저장
+          </Button>
+        </Space>
+      }
+    >
+      {/* Step 1: 견적 선택 */}
+      <Typography.Text strong style={{ display: 'block', marginBottom: 8, color: '#722ed1' }}>
+        <SearchOutlined style={{ marginRight: 6 }} />Step 1: 견적 선택
+      </Typography.Text>
+      <Select
+        showSearch
+        placeholder="견적번호 또는 대리점명으로 검색"
+        style={{ width: '100%', marginBottom: 16 }}
+        value={selectedQuote?.견적번호 || undefined}
+        onChange={handleQuoteSelect}
+        filterOption={(input, option) =>
+          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+        }
+        options={quoteOptions.map((o) => ({
+          value: o.value,
+          label: o.disabled ? (
+            <span style={{ color: '#bbb' }}>{o.label}<span style={{ color: '#999', fontSize: 11 }}> (정산 등록됨)</span></span>
+          ) : o.label,
+          disabled: o.disabled,
+        }))}
+        optionFilterProp="label"
+        notFoundContent="일치하는 견적이 없습니다"
+      />
+
+      {selectedQuote && (
+        <Card size="small" style={{ marginBottom: 16, borderColor: '#d9d9f5', background: '#faf5ff', borderRadius: 8 }}
+          styles={{ body: { padding: '10px 14px' } }}>
+          <Row gutter={12}>
+            <Col span={12}><Typography.Text type="secondary" style={{ fontSize: 11 }}>견적번호</Typography.Text><div style={{ fontWeight: 600 }}>{selectedQuote.견적번호}</div></Col>
+            <Col span={12}><Typography.Text type="secondary" style={{ fontSize: 11 }}>대리점명</Typography.Text><div style={{ fontWeight: 600 }}>{selectedQuote.대리점명 || '—'}</div></Col>
+            <Col span={8}><Typography.Text type="secondary" style={{ fontSize: 11 }}>출발일</Typography.Text><div>{selectedQuote.출발일 || '—'}</div></Col>
+            <Col span={8}><Typography.Text type="secondary" style={{ fontSize: 11 }}>인원</Typography.Text><div>{selectedQuote.인원 || 0}명</div></Col>
+            <Col span={8}><Typography.Text type="secondary" style={{ fontSize: 11 }}>상품코드</Typography.Text><div>{selectedQuote.상품코드 || '—'}</div></Col>
+          </Row>
+        </Card>
+      )}
+
+      <Divider style={{ margin: '12px 0' }} />
+
+      {/* Step 2: 나머지 정보 입력 */}
+      <Typography.Text strong style={{ display: 'block', marginBottom: 8, color: '#722ed1' }}>
+        <EditOutlined style={{ marginRight: 6 }} />Step 2: 추가 정보 입력
+      </Typography.Text>
+      <Row gutter={12}>
+        <Col span={12}>
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>키맨</span>
+            <Input size="small" value={form.키맨} onChange={(e) => setForm((f) => ({ ...f, 키맨: e.target.value }))} />
+          </div>
+        </Col>
+        <Col span={12}>
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>상품담당자</span>
+            <Input size="small" value={form.상품담당자} onChange={(e) => setForm((f) => ({ ...f, 상품담당자: e.target.value }))} />
+          </div>
+        </Col>
+        <Col span={12}>
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>지역</span>
+            <Select size="small" value={form.지역} onChange={(v) => setForm((f) => ({ ...f, 지역: v }))}
+              options={REGION_OPTIONS} style={{ width: '100%' }} placeholder="지역 선택" allowClear />
+          </div>
+        </Col>
+        <Col span={12}>
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>팀컬러</span>
+            <Input size="small" value={form.팀컬러} onChange={(e) => setForm((f) => ({ ...f, 팀컬러: e.target.value }))} />
+          </div>
+        </Col>
+        <Col span={12}>
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>체결여부</span>
+            <Select size="small" value={form.체결여부} onChange={(v) => setForm((f) => ({ ...f, 체결여부: v }))}
+              options={CONFIRM_OPTIONS} style={{ width: '100%' }} />
+          </div>
+        </Col>
+      </Row>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────
 // 메인 컴포넌트
 // ─────────────────────────────────────────────
 
@@ -213,6 +386,7 @@ export default function IncentiveTab({
   quarterly = {},
   quotes = [],
   departures = [],
+  onAddIncentive,
   onUpdateIncentive,
   onDeleteIncentive,
   isAdmin,
@@ -224,7 +398,7 @@ export default function IncentiveTab({
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
 
-  const INCENTIVE_PASSWORD = 'Hana5584@@';
+  const INCENTIVE_PASSWORD = 'Hana123@';
 
   const handleUnlock = () => {
     if (pwInput === INCENTIVE_PASSWORD) {
@@ -251,6 +425,7 @@ export default function IncentiveTab({
 
   // ── 모달 상태 ──
   const [selected, setSelected] = useState(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
   // ── 견적번호 → 견적 정보 맵 (JOIN) ──
   const quoteMap = useMemo(() => {
@@ -260,6 +435,11 @@ export default function IncentiveTab({
     }
     return m;
   }, [quotes]);
+
+  // ── 이미 등록된 견적번호 Set ──
+  const existingQuoteIds = useMemo(() => {
+    return new Set(incentives.map((i) => i.온라인견적번호).filter(Boolean));
+  }, [incentives]);
 
   // ── 지역 목록 추출 ──
   const regionOptions = useMemo(() => {
@@ -361,6 +541,12 @@ export default function IncentiveTab({
   };
 
   const hasFilter = filterRegion || filterStatus || filterTicket != null || filterDates || filterQuarter;
+
+  const handleAdd = useCallback(async (newIncentive) => {
+    await onAddIncentive?.(newIncentive);
+    // 저장 후 상세 모달 바로 오픈
+    setSelected(newIncentive);
+  }, [onAddIncentive]);
 
   // ── 렌더 ──
 
@@ -467,6 +653,18 @@ export default function IncentiveTab({
           />
         </Col>
       </Row>
+
+      {/* ── 추가 버튼 + 필터 바 헤더 ── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setAddModalOpen(true)}
+          style={{ background: '#722ed1', borderColor: '#722ed1' }}
+        >
+          인센티브 추가
+        </Button>
+      </div>
 
       {/* ── 필터 바 ── */}
       <Card
@@ -580,6 +778,15 @@ export default function IncentiveTab({
         onSave={handleSave}
         onDelete={isAdmin ? handleDelete : undefined}
         onCancel={() => setSelected(null)}
+      />
+
+      {/* ── 인센티브 추가 모달 ── */}
+      <AddIncentiveModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        quotes={quotes}
+        existingQuoteIds={existingQuoteIds}
+        onAdd={handleAdd}
       />
 
       {/* 체결 행 하이라이트 */}
