@@ -24,7 +24,7 @@ import { getCurrentWeekRange, generateWeekOptions, formatKRW } from '@/lib/store
 
 const THIS_YEAR = dayjs().year();
 const WEEK_OPTIONS = generateWeekOptions(THIS_YEAR);
-const CURRENT_WED = getCurrentWeekRange().start.format('YYYY-MM-DD');
+const CURRENT_WED = getCurrentWeekRange().wednesday;
 
 // ─────────────────────────────────────────────
 // 집계 훅
@@ -43,9 +43,11 @@ function useWeeklySummary(dailyLogs, agencies, selectedWeek) {
   return useMemo(() => {
     // 선택된 주차의 start/end 계산
     const weekOpt = WEEK_OPTIONS.find((w) => w.value === selectedWeek);
-    const start = weekOpt?.start ?? getCurrentWeekRange().start;
-    const end = weekOpt?.end ?? getCurrentWeekRange().end;
-    const wedStr = start.format('YYYY-MM-DD');
+    const curRange = getCurrentWeekRange();
+    const start = weekOpt?.start ?? curRange.start;
+    const end = weekOpt?.end ?? curRange.end;
+    // 주차 기준일 = selectedWeek (다음 수요일, generateWeekOptions의 value)
+    const wedStr = selectedWeek;
 
     // ── 이번 주 로그 필터 ──
     const weekLogs = dailyLogs.filter((log) => {

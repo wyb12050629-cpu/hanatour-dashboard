@@ -16,7 +16,7 @@ import {
   BarChartOutlined, PlusOutlined, SearchOutlined, EditOutlined,
   CalendarOutlined, CheckCircleOutlined, DeleteOutlined, SaveOutlined,
 } from '@ant-design/icons';
-import { formatKRW, getCurrentWeekRange } from '@/lib/store';
+import { formatKRW, getCurrentWeekRange, getWeekWednesday } from '@/lib/store';
 
 const { RangePicker } = DatePicker;
 
@@ -41,17 +41,7 @@ const REPORT_OPT = [
 const labelSt = { display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 };
 const fieldSt = { marginBottom: 10 };
 
-// ─────────────────────────────────────────────
-// 주차 수요일 계산 유틸
-// ─────────────────────────────────────────────
-
-function getWeekWednesday(date) {
-  const d = dayjs(date);
-  if (!d.isValid()) return null;
-  const dow = d.day(); // 0=일 ~ 6=토
-  const diffToWed = dow >= 3 ? dow - 3 : dow + 4;
-  return d.subtract(diffToWed, 'day').startOf('day');
-}
+// getWeekWednesday는 @/lib/store에서 import (문자열 'YYYY-MM-DD' 반환)
 
 // ─────────────────────────────────────────────
 // EditLogModal
@@ -71,11 +61,10 @@ function EditLogModal({ open, log, agencies, onSave, onCancel }) {
   // 날짜 변경 시 주차 자동 계산
   const handleDateChange = (d) => {
     if (d) {
-      const wed = getWeekWednesday(d);
       setForm((f) => ({
         ...f,
         날짜: d.format('YYYY-MM-DD'),
-        주차: wed ? wed.format('YYYY-MM-DD') : '',
+        주차: getWeekWednesday(d),
       }));
     } else {
       setForm((f) => ({ ...f, 날짜: '', 주차: '' }));
@@ -111,7 +100,7 @@ function EditLogModal({ open, log, agencies, onSave, onCancel }) {
   const handleCancel = () => { setForm({}); onCancel?.(); };
 
   // 계산된 주차 표시
-  const wedDisplay = current.날짜 ? getWeekWednesday(current.날짜)?.format('YYYY-MM-DD') || '' : current.주차 || '';
+  const wedDisplay = current.날짜 ? getWeekWednesday(current.날짜) || '' : current.주차 || '';
 
   return (
     <Modal
@@ -208,11 +197,11 @@ function QuickAddRow({ agencies, onAdd }) {
   const handleAdd = () => {
     if (!form.날짜) { message.warning('날짜를 선택하세요.'); return; }
     if (!form.대리점명) { message.warning('대리점명을 입력하세요.'); return; }
-    const wed = getWeekWednesday(form.날짜);
+    const dateStr = form.날짜.format('YYYY-MM-DD');
     const matched = agencies.find((a) => a.대리점명 === form.대리점명);
     onAdd?.({
-      날짜: form.날짜.format('YYYY-MM-DD'),
-      주차: wed ? wed.format('YYYY-MM-DD') : '',
+      날짜: dateStr,
+      주차: getWeekWednesday(dateStr),
       대리점코드: form.대리점코드 || matched?.대리점코드 || '',
       대리점명: form.대리점명,
       보고구분: matched?.보고구분 || '',
