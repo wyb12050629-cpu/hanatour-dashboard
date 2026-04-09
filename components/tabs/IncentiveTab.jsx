@@ -5,7 +5,7 @@
  * 인센티브 정산 탭 — 두 엑셀 파일(인센정리 + 분기별 단가)을 통합 관리하는 핵심 뷰
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import dayjs from 'dayjs';
 import {
   Typography,
@@ -44,7 +44,6 @@ import {
   SearchOutlined,
 } from '@ant-design/icons';
 import { formatKRW, calcIncentiveSummary, getQuarterRange } from '@/lib/store';
-import { upsertIncentive } from '@/lib/supabase';
 import IncentiveDetailModal from '@/components/IncentiveDetailModal';
 
 const { RangePicker } = DatePicker;
@@ -393,29 +392,6 @@ export default function IncentiveTab({
 }) {
   const { message } = App.useApp();
 
-  // ── 비밀번호 보호 ──
-  const [unlocked, setUnlocked] = useState(false);
-  const [pwInput, setPwInput] = useState('');
-  const [pwError, setPwError] = useState(false);
-
-  const INCENTIVE_PASSWORD = 'Hana123@';
-
-  const handleUnlock = () => {
-    if (pwInput === INCENTIVE_PASSWORD) {
-      setUnlocked(true);
-      setPwError(false);
-      sessionStorage.setItem('incentive_unlocked', 'true');
-    } else {
-      setPwError(true);
-      setPwInput('');
-    }
-  };
-
-  useEffect(() => {
-    const saved = sessionStorage.getItem('incentive_unlocked');
-    if (saved === 'true') setUnlocked(true);
-  }, []);
-
   // ── 필터 상태 ──
   const [filterRegion, setFilterRegion]   = useState(null);
   const [filterStatus, setFilterStatus]   = useState(null);
@@ -549,68 +525,6 @@ export default function IncentiveTab({
   }, [onAddIncentive]);
 
   // ── 렌더 ──
-
-  if (!unlocked) return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '60vh',
-    }}>
-      <Card style={{
-        width: 400,
-        borderRadius: 16,
-        boxShadow: '0 8px 32px rgba(92,45,145,0.15)',
-        border: '1px solid #e8d5f5',
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{
-            width: 56, height: 56,
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #5C2D91, #00B4C8)',
-            display: 'flex', alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 16px',
-            fontSize: 24,
-          }}>🔐</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#1a1a2e' }}>
-            인센티브 정산
-          </div>
-          <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>
-            접근 권한이 필요한 메뉴입니다
-          </div>
-        </div>
-
-        <Input.Password
-          placeholder="비밀번호를 입력하세요"
-          value={pwInput}
-          onChange={e => { setPwInput(e.target.value); setPwError(false); }}
-          onPressEnter={handleUnlock}
-          size="large"
-          status={pwError ? 'error' : ''}
-          style={{ marginBottom: 8 }}
-        />
-        {pwError && (
-          <div style={{ color: '#ff4d4f', fontSize: 13, marginBottom: 12 }}>
-            비밀번호가 올바르지 않습니다
-          </div>
-        )}
-        <Button
-          type="primary"
-          block
-          size="large"
-          onClick={handleUnlock}
-          style={{
-            background: 'linear-gradient(135deg, #5C2D91, #7B3DB5)',
-            border: 'none',
-            marginTop: 8,
-          }}
-        >
-          확인
-        </Button>
-      </Card>
-    </div>
-  );
 
   return (
     <div style={{ padding: '24px' }}>
