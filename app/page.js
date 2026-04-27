@@ -81,7 +81,7 @@ export default function Home() {
             <div style={{ width: 60, height: 1, background: 'rgba(255,255,255,0.3)', marginBottom: 16 }} />
 
             <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, marginBottom: 4 }}>
-              담당자 · 영업2팀 왕유빈
+              담당자 · 영업2팀 김기웅
             </div>
             <span className="bon-courage">
               ✦ 오늘 하루도 bon courage!
