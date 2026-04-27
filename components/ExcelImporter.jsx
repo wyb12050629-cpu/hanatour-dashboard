@@ -129,6 +129,13 @@ const AGENCY_COLS = [
     ellipsis: true,
   },
   {
+    title: '대표자명',
+    dataIndex: '대표자명',
+    width: 90,
+    ellipsis: true,
+    render: (v) => v || <Typography.Text type="secondary">—</Typography.Text>,
+  },
+  {
     title: '보고구분',
     dataIndex: '보고구분',
     width: 100,

@@ -59,7 +59,7 @@ function EditAgencyModal({ open, agency, isNew, onSave, onCancel }) {
   const current = useMemo(() => {
     if (!open) return {};
     return isNew
-      ? { 대리점코드: '', 대리점명: '', 대리점유형: '', 점형태: '', 내부등급: '',
+      ? { 대리점코드: '', 대리점명: '', 대리점유형: '', 대표자명: '', 점형태: '', 내부등급: '',
           팀: '', 부서: '', 담당자: '', 보고구분: '일반대리점', 관리등급: 'C',
           특징: '', 다음액션: '', 최근접촉일: '', 메모: '', ...form }
       : { ...agency, ...form };
@@ -134,6 +134,14 @@ function EditAgencyModal({ open, agency, isNew, onSave, onCancel }) {
             <Select size="small" value={current.대리점유형 || undefined}
               onChange={(v) => patch('대리점유형', v)}
               options={TYPE_OPTIONS} style={{ width: '100%' }} allowClear placeholder="선택" />
+          </div>
+        </Col>
+        {/* 대표자명 */}
+        <Col span={8}>
+          <div style={fieldStyle}>
+            <span style={labelStyle}>대표자명</span>
+            <Input size="small" value={current.대표자명 || ''}
+              onChange={(e) => patch('대표자명', e.target.value)} placeholder="예: 홍길동" />
           </div>
         </Col>
         {/* 보고구분 */}
@@ -423,6 +431,8 @@ export default function AgencyTab({
       sorter: (a, b) => (a.관리등급 || 'Z').localeCompare(b.관리등급 || 'Z'),
       render: (v) => v ? <Tag color={{ A: 'gold', B: 'cyan', C: 'default' }[v] ?? 'default'}>{v}</Tag> : '—',
     },
+    { title: '대표자명', dataIndex: '대표자명', width: 90, ellipsis: true,
+      render: (v) => v || <Typography.Text type="secondary">—</Typography.Text> },
     { title: '팀', dataIndex: '팀', width: 80, ellipsis: true },
     { title: '담당자', dataIndex: '담당자', width: 70, ellipsis: true },
     {
